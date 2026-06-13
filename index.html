@@ -299,16 +299,15 @@ const COLORS = ['#1967d2','#d93025','#137333','#e37400','#7b2d8b','#0077b6','#c6
 //  Yahoo Finance 프록시 fetch (현재가)
 // ══════════════════════════════════════════════
 async function yahooFetch(ticker) {
-  // v7 quote API → 시가총액 포함
-  const urlQ = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ticker)}&fields=regularMarketPrice,regularMarketPreviousClose,marketCap`;
-  // v8 chart API → fallback
+  // v7 quote API → 발행주식수(sharesOutstanding) + 현재가 포함
+  const urlQ = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ticker)}&fields=regularMarketPrice,regularMarketPreviousClose,marketCap,sharesOutstanding`;
   const urlC = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
   const proxies = [
     u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
   ];
 
-  // v7 quote 먼저 시도 (시가총액 포함)
+  // v7 quote 먼저 시도
   for (const makeProxy of proxies) {
     try {
       const res = await fetch(makeProxy(urlQ), { signal: AbortSignal.timeout(10000) });
@@ -316,11 +315,12 @@ async function yahooFetch(ticker) {
       const j = await res.json();
       const q = j?.quoteResponse?.result?.[0];
       if (!q) continue;
-      return {
-        price: q.regularMarketPrice,
-        prev:  q.regularMarketPreviousClose || 0,
-        cap:   q.marketCap || 0
-      };
+      const price  = q.regularMarketPrice;
+      const prev   = q.regularMarketPreviousClose || 0;
+      // 시가총액: API가 주면 사용, 없으면 현재가×발행주식수, 그것도 없으면 하드코딩×현재가
+      const shares = q.sharesOutstanding || SHARES[ticker] || 0;
+      const cap    = q.marketCap || (price && shares ? price * shares : 0);
+      if (price) return { price, prev, cap, shares };
     } catch(e) {}
   }
 
@@ -332,13 +332,15 @@ async function yahooFetch(ticker) {
       const j = await res.json();
       const meta = j?.chart?.result?.[0]?.meta;
       if (!meta) continue;
-      return {
-        price: meta.regularMarketPrice,
-        prev:  meta.chartPreviousClose || meta.previousClose || 0,
-        cap:   meta.marketCap || 0
-      };
+      const price  = meta.regularMarketPrice;
+      const prev   = meta.chartPreviousClose || meta.previousClose || 0;
+      const shares = SHARES[ticker] || 0;
+      const cap    = meta.marketCap || (price && shares ? price * shares : 0);
+      if (price) return { price, prev, cap, shares };
     } catch(e) {}
   }
+
+  // 완전 실패시 하드코딩 발행주식수라도 활용
   return null;
 }
 
@@ -630,15 +632,74 @@ function renderPnl() {
 // ══════════════════════════════════════════════
 //  TOP 20 조회 (현재가 실시간)
 // ══════════════════════════════════════════════
+// 발행주식수(천주→주 변환) - 2025.06.12 KRX 기준
+const SHARES = {
+  // KOSPI
+  '005930.KS': 5846279000,   // 삼성전자
+  '000660.KS': 712702000,    // SK하이닉스
+  '034730.KS': 131958000,    // SK스퀘어
+  '005935.KS': 802371000,    // 삼성전자우
+  '009150.KS': 74694000,     // 삼성전기
+  '005380.KS': 204758000,    // 현대차
+  '373220.KS': 234000000,    // LG에너지솔루션
+  '032830.KS': 200000000,    // 삼성생명
+  '028260.KS': 162168000,    // 삼성물산
+  '329180.KS': 104961000,    // HD현대중공업
+  '000270.KS': 390413000,    // 기아
+  '207940.KS': 46291000,     // 삼성바이오로직스
+  '034020.KS': 640561000,    // 두산에너빌리티
+  '105560.KS': 354688000,    // KB금융
+  '012450.KS': 51563000,     // 한화에어로스페이스
+  '012330.KS': 90733000,     // 현대모비스
+  '055550.KS': 474654000,    // 신한지주
+  '006400.KS': 80586000,     // 삼성SDI
+  '034730.KS': 72503000,     // SK
+  '267260.KS': 36047000,     // HD현대일렉트릭
+  // NASDAQ
+  'AAPL':  15204137000,
+  'MSFT':  7433000000,
+  'NVDA':  24440000000,
+  'AMZN':  10594000000,
+  'META':  2546000000,
+  'GOOGL': 5900000000,
+  'GOOG':  5900000000,
+  'TSLA':  3210000000,
+  'AVGO':  4670000000,
+  'NFLX':  429000000,
+  'COST':  443000000,
+  'AMD':   1617000000,
+  'TMUS':  1170000000,
+  'PEP':   1376000000,
+  'QCOM':  1070000000,
+  'ISRG':  357000000,
+  'TXN':   908000000,
+  'BKNG':  38000000,
+  'PANW':  1327000000,
+  'LRCX':  426000000,
+};
+
 const TOP20 = {
   kospi: [
-    ['삼성전자','005930.KS'],['SK하이닉스','000660.KS'],['삼성바이오로직스','207940.KS'],
-    ['LG에너지솔루션','373220.KS'],['현대차','005380.KS'],['삼성SDI','006400.KS'],
-    ['기아','000270.KS'],['POSCO홀딩스','005490.KS'],['NAVER','035420.KS'],
-    ['LG화학','051910.KS'],['삼성물산','028260.KS'],['현대모비스','012330.KS'],
-    ['KB금융','105560.KS'],['셀트리온','068270.KS'],['신한지주','055550.KS'],
-    ['LG전자','066570.KS'],['카카오','035720.KS'],['하나금융지주','086790.KS'],
-    ['한국전력','015760.KS'],['두산에너빌리티','034020.KS']
+    ['삼성전자','005930.KS'],
+    ['SK하이닉스','000660.KS'],
+    ['SK스퀘어','034730.KS'],
+    ['삼성전자우','005935.KS'],
+    ['삼성전기','009150.KS'],
+    ['현대차','005380.KS'],
+    ['LG에너지솔루션','373220.KS'],
+    ['삼성생명','032830.KS'],
+    ['삼성물산','028260.KS'],
+    ['HD현대중공업','329180.KS'],
+    ['기아','000270.KS'],
+    ['삼성바이오로직스','207940.KS'],
+    ['두산에너빌리티','034020.KS'],
+    ['KB금융','105560.KS'],
+    ['한화에어로스페이스','012450.KS'],
+    ['현대모비스','012330.KS'],
+    ['신한지주','055550.KS'],
+    ['삼성SDI','006400.KS'],
+    ['SK','034730.KS'],
+    ['HD현대일렉트릭','267260.KS'],
   ],
   nasdaq: [
     ['Apple','AAPL'],['Microsoft','MSFT'],['NVIDIA','NVDA'],['Amazon','AMZN'],
@@ -662,7 +723,7 @@ async function fetchTop20(market) {
     name, sym,
     price: results[i]?.price,
     prev:  results[i]?.prev,
-    cap:   results[i]?.cap||0
+    cap:   results[i]?.cap || (results[i]?.price && SHARES[sym] ? results[i].price * SHARES[sym] : 0)
   })).filter(r=>r.price).sort((a,b)=>b.cap-a.cap);
 
   if (!items.length) {
