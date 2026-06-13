@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>지수 ETF 분할매수 플래너</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; min-height: 100vh; padding: 16px; }
+h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 14px; color: #1a1a2e; }
+
+/* ── 상단바 ── */
+.top-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; background:#fff; border:1px solid #dde; border-radius:10px; padding:10px 14px; }
+.index-box { display: flex; align-items: center; gap: 5px; border-right:1px solid #eee; padding-right:10px; font-size: 0.85rem; }
+.index-box:last-of-type { border-right:none; }
+.index-label { color: #666; font-weight: 600; white-space:nowrap; }
+.index-val { font-weight: 700; color: #1a1a2e; cursor: pointer; min-width: 80px; text-align: right; }
+.index-val:hover { text-decoration: underline; color:#1967d2; }
+.index-chg { font-size:0.75rem; min-width:54px; text-align:right; }
+.chg-up { color:#d93025; font-weight:700; }
+.chg-dn { color:#1967d2; font-weight:700; }
+.chg-flat { color:#888; }
+.fx-box { display:flex; align-items:center; gap:5px; font-size:0.82rem; border-right:1px solid #eee; padding-right:10px; }
+.fx-label { color:#888; font-weight:600; }
+.fx-val { font-weight:700; color:#1a1a2e; min-width:50px; text-align:right; }
+.btn { cursor: pointer; border: none; border-radius: 7px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; }
+.btn-update { background: #e8f0fe; color: #1967d2; }
+.btn-update:hover { background: #d2e3fc; }
+.btn-save { background: #e6f4ea; color: #137333; }
+.btn-save:hover { background: #ceead6; }
+.btn-csv { background: #fce8e6; color: #c5221f; }
+.btn-csv:hover { background: #f5c6c2; }
+.hint { font-size: 0.72rem; color: #aaa; flex:1; text-align:right; }
+
+/* ── 투자금/프리셋 ── */
+.total-section { background: #fff; border: 1px solid #dde; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.total-section label { font-size: 0.85rem; color: #555; font-weight: 600; }
+.total-input { border: 1px solid #ccc; border-radius: 6px; padding: 5px 9px; font-size: 0.9rem; width: 130px; text-align: right; }
+.total-display { font-size: 0.9rem; color: #1967d2; font-weight: 700; }
+.preset-btns { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+.btn-preset { background:#f7f8fc; border:1px solid #dde; border-radius:6px; padding:4px 10px; font-size:0.78rem; font-weight:600; cursor:pointer; color:#555; }
+.btn-preset:hover { background:#e8f0fe; color:#1967d2; border-color:#1967d2; }
+
+/* ── 요약바 ── */
+.summary-bar { background: #e8f0fe; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; font-size: 0.82rem; color: #1967d2; display: flex; gap: 18px; flex-wrap: wrap; align-items:center; }
+.summary-bar span { font-weight: 700; }
+.weight-warn { background:#fce8e6 !important; color:#d93025 !important; }
+
+/* ── 플랜 테이블 ── */
+.table-wrap { overflow-x: auto; margin-bottom: 10px; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; font-size: 0.82rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+th { background: #f7f8fc; color: #555; font-weight: 700; padding: 9px 6px; border-bottom: 2px solid #e0e4ef; text-align: center; white-space: nowrap; }
+td { padding: 6px 4px; border-bottom: 1px solid #f0f2f5; text-align: center; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #fafbff; }
+tr.done-row td { background:#f0faf4; opacity:0.75; }
+input.cell { border: 1px solid #dde; border-radius: 5px; padding: 4px 5px; width: 100%; text-align: right; font-size: 0.82rem; background: #fafbff; }
+input.cell:focus { outline: none; border-color: #1967d2; background: #fff; }
+input.etf-name { text-align:left; min-width:90px; }
+.cell-display { color: #1a1a2e; font-weight: 600; }
+.cell-qty { color: #137333; font-weight: 700; }
+.btn-del { background: none; border: none; cursor: pointer; color: #d93025; font-size: 1rem; padding: 2px 5px; border-radius: 4px; }
+.btn-del:hover { background: #fce8e6; }
+.check-done { width:16px; height:16px; cursor:pointer; accent-color:#137333; }
+
+/* ── 합계박스 ── */
+.stat-box { background:#eef2ff; border:1px solid #c5d3f5; border-radius:8px; padding:10px 16px; margin-bottom:14px; font-size:0.85rem; color:#1a1a2e; display:flex; gap:20px; flex-wrap:wrap; align-items:center; }
+.stat-box strong { color:#1967d2; }
+
+/* ── 손익 섹션 ── */
+.pnl-section { background:#fff; border:1px solid #dde; border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+.pnl-section h2 { font-size:0.95rem; font-weight:700; color:#1a1a2e; margin-bottom:10px; }
+.pnl-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+.pnl-table th { background:#f7f8fc; color:#555; font-weight:700; padding:7px 6px; border-bottom:2px solid #e0e4ef; text-align:center; white-space:nowrap; }
+.pnl-table td { padding:6px 4px; border-bottom:1px solid #f0f2f5; text-align:center; vertical-align:middle; }
+.pnl-table tr:last-child td { border-bottom:none; }
+.pnl-pos { color:#d93025; font-weight:700; }
+.pnl-neg { color:#1967d2; font-weight:700; }
+.pnl-total { background:#f7f8fc; font-weight:700; }
+
+/* ── 도넛차트 ── */
+.chart-section { background:#fff; border:1px solid #dde; border-radius:10px; padding:14px 16px; margin-bottom:14px; display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+.chart-section h2 { font-size:0.95rem; font-weight:700; color:#1a1a2e; width:100%; margin-bottom:0; }
+#donutCanvas { width:140px; height:140px; flex-shrink:0; }
+.donut-legend { display:flex; flex-direction:column; gap:5px; font-size:0.78rem; flex:1; }
+.legend-item { display:flex; align-items:center; gap:7px; }
+.legend-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+
+/* ── TOP20 ── */
+.top20-wrap { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+.top20-panel { flex: 1; min-width: 300px; background: #fff; border: 1px solid #dde; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+.top20-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 2px solid #e0e4ef; }
+.top20-title { font-size: 0.92rem; font-weight: 700; color: #1a1a2e; }
+.top20-updated { font-size: 0.72rem; color: #aaa; margin-right:6px; }
+.top20-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.top20-table th { background: #f7f8fc; color: #666; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; }
+.top20-table th:first-child { text-align: center; width: 26px; }
+.top20-table th:nth-child(2) { text-align: left; }
+.top20-table td { padding: 5px 8px; border-bottom: 1px solid #f0f2f5; text-align: right; vertical-align: middle; }
+.top20-table td:first-child { text-align: center; color: #aaa; font-size: 0.72rem; }
+.top20-table td:nth-child(2) { text-align: left; font-weight: 600; color: #1a1a2e; }
+.top20-table tr:last-child td { border-bottom: none; }
+.top20-table tr:hover td { background: #fafbff; }
+.top20-loading { text-align: center; padding: 24px; color: #aaa; font-size: 0.82rem; }
+.btn-top20 { background: #e8f0fe; color: #1967d2; border: none; border-radius: 6px; padding: 4px 9px; font-size: 0.74rem; font-weight: 600; cursor: pointer; }
+.btn-top20:hover { background: #d2e3fc; }
+
+/* ── 메모 ── */
+.memo-section { background: #fff; border: 1px solid #dde; border-radius: 10px; padding: 14px 16px; margin-bottom:14px; }
+.memo-section h2 { font-size: 0.95rem; font-weight:700; margin-bottom: 10px; color: #1a1a2e; }
+.memo-item { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; background: #fafbff; border: 1px solid #e8ecf5; border-radius: 8px; padding: 8px 10px; }
+.memo-item-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.memo-date { font-size: 0.78rem; color: #888; font-weight: 600; white-space: nowrap; min-width: 80px; }
+.memo-etf { border: 1px solid #c5d3f5; border-radius: 5px; padding: 3px 8px; font-size: 0.8rem; width: 140px; background: #fff; font-family: inherit; color: #1967d2; font-weight: 600; }
+.memo-etf:focus { outline: none; border-color: #1967d2; }
+.memo-etf::placeholder { color: #aaa; font-weight: 400; }
+.btn-memo-del { background: none; border: none; cursor: pointer; color: #d93025; font-size: 0.95rem; padding: 2px 6px; border-radius: 4px; margin-left: auto; }
+.btn-memo-del:hover { background: #fce8e6; }
+.memo-item textarea { border: 1px solid #dde; border-radius: 6px; padding: 6px 9px; font-size: 0.82rem; resize: vertical; min-height: 38px; font-family: inherit; width: 100%; }
+.memo-item textarea:focus { outline: none; border-color: #1967d2; }
+
+/* ── 사용법 ── */
+.usage { background: #fff; border: 1px solid #dde; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 0.8rem; color: #555; line-height: 1.7; }
+.usage strong { color: #1a1a2e; }
+
+/* ── Toast ── */
+.toast { display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #137333; color: #fff; border-radius: 8px; padding: 9px 22px; font-size: 0.85rem; font-weight: 600; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
+.toast.show { display: block; }
+
+.btn-add { background: #e8f0fe; color: #1967d2; border: 1px dashed #1967d2; border-radius: 7px; padding: 7px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer; margin-top: 4px; }
+.btn-add:hover { background: #d2e3fc; }
+
+@media (max-width:600px) {
+  table { font-size:0.72rem; }
+  th,td { padding:5px 3px; }
+  input.cell { font-size:0.72rem; padding:3px 3px; }
+}
+</style>
+</head>
+<body>
+<h1>📊 지수 ETF 분할매수 플래너</h1>
+
+<!-- 상단 지수/환율 바 -->
+<div class="top-bar">
+  <div class="index-box">
+    <span class="index-label">KOSPI</span>
+    <span class="index-val" id="kospiVal" title="클릭하여 수동 입력" onclick="editIndex('kospi')">—</span>
+    <span class="index-chg" id="kospiChg">—</span>
+  </div>
+  <div class="index-box">
+    <span class="index-label">NASDAQ</span>
+    <span class="index-val" id="nasdaqVal" title="클릭하여 수동 입력" onclick="editIndex('nasdaq')">—</span>
+    <span class="index-chg" id="nasdaqChg">—</span>
+  </div>
+  <div class="fx-box">
+    <span class="fx-label">USD/KRW</span>
+    <span class="fx-val" id="fxVal">—</span>
+    <span class="index-chg" id="fxChg">—</span>
+  </div>
+  <button class="btn btn-update" onclick="fetchAll()">⟳ 전체 업데이트</button>
+  <button class="btn btn-save" onclick="saveAll()">💾 저장</button>
+  <button class="btn btn-csv" onclick="exportCSV()">📥 CSV</button>
+  <span class="hint" id="lastUpdated">GitHub Pages에서 자동 조회됩니다</span>
+</div>
+
+<!-- 투자금 + 프리셋 -->
+<div class="total-section">
+  <label>총 투자금</label>
+  <input class="total-input" id="totalInput" type="text" value="100000000" oninput="onTotalChange()" placeholder="예: 1.5억, 5000만">
+  <span class="total-display" id="totalDisplay">= 1억원</span>
+  <div class="preset-btns">
+    <span style="font-size:0.78rem;color:#888;align-self:center;">프리셋:</span>
+    <button class="btn-preset" onclick="applyPreset(5,20)">5구간 균등</button>
+    <button class="btn-preset" onclick="applyPreset(5,10)">5구간 하락10%</button>
+    <button class="btn-preset" onclick="applyPreset(10,10)">10구간 균등</button>
+    <button class="btn-preset" onclick="clearRows()">초기화</button>
+  </div>
+</div>
+
+<!-- 비중 요약바 -->
+<div class="summary-bar" id="summaryBar">
+  비중 합계: <span id="sumWeight">0</span>% &nbsp;|&nbsp;
+  투자금 합계: <span id="sumAmt">0</span>원 &nbsp;|&nbsp;
+  완료 구간: <span id="sumDone">0</span>개
+</div>
+
+<!-- 분할매수 플랜 테이블 -->
+<div class="table-wrap">
+<table id="planTable">
+  <thead>
+    <tr>
+      <th>✓</th>
+      <th>#</th>
+      <th>ETF명</th>
+      <th>하락폭(%)</th>
+      <th>스타트단가</th>
+      <th>진입지수</th>
+      <th>목표단가</th>
+      <th>비중(%)</th>
+      <th>투자금(원)</th>
+      <th>ETF단가(원)</th>
+      <th>매입수량</th>
+      <th>손절가</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="planBody"></tbody>
+</table>
+</div>
+<button class="btn-add" onclick="addRow()">+ 구간 추가</button>
+
+<!-- 합계 통계 -->
+<div class="stat-box" style="margin-top:12px;">
+  <span>📦 총 매입수량 <strong id="sumQty">—</strong> 주</span>
+  <span>📊 평균단가 <strong id="avgPrice">—</strong> 원</span>
+  <span>💰 투자합계 <strong id="sumAmtTotal">—</strong> 원</span>
+  <span>🎯 목표수익률 <input id="targetRate" type="number" value="20" min="1" max="500" style="width:50px;border:1px solid #dde;border-radius:5px;padding:2px 5px;font-size:0.82rem;text-align:right;" oninput="recalcAll()"> %</span>
+  <span>🏆 목표금액 <strong id="targetAmt">—</strong> 원</span>
+</div>
+
+<!-- 비중 도넛차트 -->
+<div class="chart-section">
+  <h2>📈 구간별 비중 차트</h2>
+  <canvas id="donutCanvas" width="140" height="140"></canvas>
+  <div class="donut-legend" id="donutLegend"></div>
+</div>
+
+<!-- 실현손익 기록 -->
+<div class="pnl-section">
+  <h2>💸 매도 / 실현손익 기록</h2>
+  <table class="pnl-table">
+    <thead>
+      <tr>
+        <th>날짜</th><th>ETF명</th><th>매수단가(원)</th><th>매도단가(원)</th><th>수량</th><th>수익금(원)</th><th>수익률</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="pnlBody"></tbody>
+  </table>
+  <div id="pnlTotal" class="pnl-total" style="padding:8px 12px;font-size:0.82rem;border-top:2px solid #e0e4ef;display:none;"></div>
+  <button class="btn-add" onclick="addPnl()" style="margin-top:10px;">+ 매도 기록 추가</button>
+</div>
+
+<!-- KOSPI/NASDAQ TOP20 -->
+<div class="top20-wrap">
+  <div class="top20-panel">
+    <div class="top20-header">
+      <span class="top20-title">🇰🇷 KOSPI 시총 TOP 20 (현재가)</span>
+      <span>
+        <span class="top20-updated" id="kospiTopUpdated"></span>
+        <button class="btn-top20" onclick="fetchTop20('kospi')">⟳ 조회</button>
+      </span>
+    </div>
+    <div id="kospiTopBody"><div class="top20-loading">⟳ 조회 버튼을 누르세요<br><small style="color:#bbb">GitHub Pages에서 자동 조회</small></div></div>
+  </div>
+  <div class="top20-panel">
+    <div class="top20-header">
+      <span class="top20-title">🇺🇸 NASDAQ 시총 TOP 20 (현재가)</span>
+      <span>
+        <span class="top20-updated" id="nasdaqTopUpdated"></span>
+        <button class="btn-top20" onclick="fetchTop20('nasdaq')">⟳ 조회</button>
+      </span>
+    </div>
+    <div id="nasdaqTopBody"><div class="top20-loading">⟳ 조회 버튼을 누르세요<br><small style="color:#bbb">GitHub Pages에서 자동 조회</small></div></div>
+  </div>
+</div>
+
+<!-- 매수 메모 -->
+<div class="memo-section">
+  <h2>📝 매수 메모</h2>
+  <div id="memoList"></div>
+  <button class="btn-add" onclick="addMemo()">+ 메모 추가</button>
+</div>
+
+<!-- 사용법 -->
+<div class="usage">
+  <strong>사용법</strong>
+  ① <em>⟳ 전체 업데이트</em>: KOSPI·NASDAQ·환율·현재가 동시 조회 (GitHub Pages에서 자동)<br>
+  ② 지수·환율 클릭 시 수동 입력 가능 &nbsp;·&nbsp; 💾 저장 → 다음에 열어도 유지<br>
+  ③ <strong>프리셋</strong>: 구간수·하락폭 자동 세팅 &nbsp;·&nbsp; ETF명 입력 후 스타트단가 입력 시 ETF단가 자동계산<br>
+  ④ ✓ 체크박스: 매수완료 구간 표시 &nbsp;·&nbsp; 손절가 자동 표시<br>
+  ⑤ 매도 기록 추가 시 수익금·수익률 자동 계산 &nbsp;·&nbsp; 📥 CSV로 엑셀 내보내기
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  상태
+// ══════════════════════════════════════════════
+let kospiIndex = 0, nasdaqIndex = 0, usdkrw = 0;
+let kospiChgPct = 0, nasdaqChgPct = 0;
+let rows  = [];   // {etfName,drop,startPrice,weight,etfPrice,done,stopLoss}
+let pnls  = [];   // {date,etfName,buyPrice,sellPrice,qty}
+let memos = [];
+
+const COLORS = ['#1967d2','#d93025','#137333','#e37400','#7b2d8b','#0077b6','#c62828','#2e7d32','#f57f17','#4a148c','#01579b','#b71c1c'];
+
+// ══════════════════════════════════════════════
+//  Yahoo Finance 프록시 fetch (현재가)
+// ══════════════════════════════════════════════
+async function yahooFetch(ticker) {
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+  const proxies = [
+    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  ];
+  for (const p of proxies) {
+    try {
+      const res = await fetch(p, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) continue;
+      const j = await res.json();
+      const meta = j?.chart?.result?.[0]?.meta;
+      if (!meta) continue;
+      return {
+        price: meta.regularMarketPrice,
+        prev:  meta.chartPreviousClose || meta.previousClose || 0,
+        cap:   meta.marketCap || 0
+      };
+    } catch(e) {}
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════
+//  전체 업데이트 (지수 + 환율)
+// ══════════════════════════════════════════════
+async function fetchAll() {
+  document.getElementById('kospiVal').textContent  = '…';
+  document.getElementById('nasdaqVal').textContent = '…';
+  document.getElementById('fxVal').textContent     = '…';
+
+  const [kp, nq, fx] = await Promise.all([
+    yahooFetch('^KS11'),
+    yahooFetch('^IXIC'),
+    yahooFetch('USDKRW=X')
+  ]);
+
+  const fmt  = (v,d=2) => v == null ? '—' : parseFloat(v).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const chgEl = (elId, price, prev) => {
+    const el = document.getElementById(elId);
+    if (!price || !prev) { el.textContent='—'; el.className='index-chg chg-flat'; return; }
+    const pct = (price - prev) / prev * 100;
+    el.textContent = (pct>=0?'+':'') + pct.toFixed(2)+'%';
+    el.className = 'index-chg ' + (pct>0?'chg-up':pct<0?'chg-dn':'chg-flat');
+    return pct;
+  };
+
+  if (kp) {
+    kospiIndex = kp.price;
+    kospiChgPct = chgEl('kospiChg', kp.price, kp.prev);
+    document.getElementById('kospiVal').textContent = fmt(kp.price);
+  } else document.getElementById('kospiVal').textContent = '수동입력';
+
+  if (nq) {
+    nasdaqIndex = nq.price;
+    nasdaqChgPct = chgEl('nasdaqChg', nq.price, nq.prev);
+    document.getElementById('nasdaqVal').textContent = fmt(nq.price);
+  } else document.getElementById('nasdaqVal').textContent = '수동입력';
+
+  if (fx) {
+    usdkrw = fx.price;
+    document.getElementById('fxVal').textContent = fmt(fx.price, 1);
+    chgEl('fxChg', fx.price, fx.prev);
+  } else document.getElementById('fxVal').textContent = '수동';
+
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent =
+    `최종조회: ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  recalcAll();
+}
+
+// ══════════════════════════════════════════════
+//  지수 수동 편집
+// ══════════════════════════════════════════════
+function editIndex(which) {
+  const elId = which==='kospi'?'kospiVal':'nasdaqVal';
+  const cur  = which==='kospi'?kospiIndex:nasdaqIndex;
+  const v = prompt((which==='kospi'?'KOSPI':'NASDAQ')+' 지수를 입력하세요:', cur||'');
+  if (v===null) return;
+  const n = parseFloat(v.replace(/,/g,''));
+  if (isNaN(n)) return;
+  if (which==='kospi') kospiIndex=n;
+  else nasdaqIndex=n;
+  document.getElementById(elId).textContent = n.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  recalcAll();
+}
+
+// ══════════════════════════════════════════════
+//  투자금 파싱
+// ══════════════════════════════════════════════
+function parseTotal(s) {
+  if (!s) return 0;
+  s = s.trim().replace(/,/g,'');
+  const m = s.match(/([\d.]+)\s*([억만천])?/);
+  if (!m) return parseFloat(s)||0;
+  let n = parseFloat(m[1]);
+  if (m[2]==='억') n*=100000000;
+  else if (m[2]==='만') n*=10000;
+  else if (m[2]==='천') n*=1000;
+  return Math.round(n);
+}
+function getTotal() { return parseTotal(document.getElementById('totalInput').value); }
+function onTotalChange() {
+  const t = getTotal();
+  const el = document.getElementById('totalDisplay');
+  if (t>=100000000) el.textContent='= '+( t/100000000).toFixed(t%100000000===0?0:2)+'억원';
+  else if (t>=10000) el.textContent='= '+(t/10000).toFixed(0)+'만원';
+  else el.textContent='= '+t.toLocaleString('ko-KR')+'원';
+  recalcAll();
+}
+
+// ══════════════════════════════════════════════
+//  프리셋
+// ══════════════════════════════════════════════
+function applyPreset(cnt, dropStep) {
+  rows = [];
+  const w = Math.floor(100/cnt);
+  for (let i=0;i<cnt;i++) {
+    rows.push({ etfName:'', drop: String((i+1)*dropStep), startPrice:'', weight: String(i===cnt-1?100-(w*(cnt-1)):w), etfPrice:'', done:false, stopLoss:'' });
+  }
+  renderTable(); recalcAll();
+}
+function clearRows() { rows=[]; addRow(); addRow(); addRow(); renderTable(); recalcAll(); }
+
+// ══════════════════════════════════════════════
+//  테이블 렌더
+// ══════════════════════════════════════════════
+function addRow() {
+  rows.push({ etfName:'', drop:'', startPrice:'', weight:'', etfPrice:'', done:false, stopLoss:'' });
+  renderTable(); recalcAll();
+}
+function deleteRow(i) { rows.splice(i,1); renderTable(); recalcAll(); }
+function toggleDone(i,v) { rows[i].done=v; renderTable(); recalcAll(); }
+
+function getEntryIndexDisplay(drop) {
+  if (!drop) return '—';
+  const d = parseFloat(drop)||0;
+  let html='';
+  if (kospiIndex>0)  html+=`<span style="color:#1967d2;font-size:0.78rem">K ${(kospiIndex*(1-d/100)).toLocaleString('ko-KR',{maximumFractionDigits:0})}</span>`;
+  if (nasdaqIndex>0) html+=(html?' ':'')+'<span style="color:#d93025;font-size:0.78rem">N '+(nasdaqIndex*(1-d/100)).toLocaleString('ko-KR',{maximumFractionDigits:0})+'</span>';
+  return html||'—';
+}
+
+function renderTable() {
+  const tbody = document.getElementById('planBody');
+  tbody.innerHTML = '';
+  rows.forEach((r,i) => {
+    const tr = document.createElement('tr');
+    if (r.done) tr.className='done-row';
+    const drop = parseFloat(r.drop)||0;
+    const startP = parseFloat((r.startPrice||'').replace(/,/g,''))||0;
+    const etfEntry = startP>0&&drop>0 ? (startP*(1-drop/100)).toFixed(0) : (r.etfPrice||'');
+    // 손절가: 매입단가 * 0.9 (10% 하락)
+    const stopLoss = parseFloat(etfEntry)>0 ? Math.round(parseFloat(etfEntry)*0.9).toLocaleString('ko-KR') : '—';
+    // 목표단가
+    const targetRate = parseFloat(document.getElementById('targetRate')?.value||20);
+    const targetPrice = parseFloat(etfEntry)>0 ? Math.round(parseFloat(etfEntry)*(1+targetRate/100)).toLocaleString('ko-KR') : '—';
+
+    tr.innerHTML = `
+      <td><input type="checkbox" class="check-done" ${r.done?'checked':''} onchange="toggleDone(${i},this.checked)"></td>
+      <td style="color:#aaa;font-size:0.75rem">${i+1}</td>
+      <td><input class="cell etf-name" type="text" value="${r.etfName||''}" placeholder="ETF명" oninput="rows[${i}].etfName=this.value"></td>
+      <td><input class="cell" type="number" value="${r.drop||''}" placeholder="%" step="0.5" min="0" oninput="onDropChange(${i},this.value)" style="width:60px"></td>
+      <td><input class="cell" type="text" value="${r.startPrice||''}" placeholder="현재ETF가" oninput="onStartChange(${i},this.value)" style="width:80px"></td>
+      <td id="entryIdx_${i}" class="cell-display" style="font-size:0.78rem">${getEntryIndexDisplay(r.drop)}</td>
+      <td style="color:#137333;font-weight:700;font-size:0.8rem">${targetPrice}</td>
+      <td><input class="cell" type="number" value="${r.weight||''}" placeholder="%" step="1" min="0" max="100" oninput="onWeightChange(${i},this.value)" style="width:55px"></td>
+      <td id="amt_${i}" class="cell-display">—</td>
+      <td><input class="cell" id="etfInput_${i}" type="text" value="${etfEntry||''}" placeholder="단가" oninput="onEtfChange(${i},this.value)" style="width:80px"></td>
+      <td id="qty_${i}" class="cell-qty">—</td>
+      <td style="color:#e37400;font-size:0.8rem;font-weight:700">${stopLoss}</td>
+      <td><button class="btn-del" onclick="deleteRow(${i})">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function onDropChange(i,v)    { rows[i].drop=v; recalcRow(i); renderTable(); }
+function onStartChange(i,v)   { rows[i].startPrice=v.replace(/,/g,''); recalcRow(i); renderTable(); }
+function onWeightChange(i,v)  { rows[i].weight=v; recalcRow(i); }
+function onEtfChange(i,v)     { rows[i].etfPrice=v.replace(/,/g,''); recalcRow(i); }
+
+function recalcRow(i) {
+  const total = getTotal();
+  const row = rows[i];
+  const drop   = parseFloat(row.drop)||0;
+  const weight = parseFloat(row.weight)||0;
+  const amt    = weight>0 ? Math.round(total*weight/100) : 0;
+  const startP = parseFloat((row.startPrice||'').replace(/,/g,''))||0;
+  let etfForCalc = parseFloat((row.etfPrice||'').replace(/,/g,''))||0;
+  if (startP>0 && drop>0) etfForCalc = startP*(1-drop/100);
+
+  const idxEl = document.getElementById('entryIdx_'+i);
+  if (idxEl) idxEl.innerHTML = getEntryIndexDisplay(drop);
+  const amtEl = document.getElementById('amt_'+i);
+  if (amtEl) amtEl.textContent = amt>0 ? amt.toLocaleString('ko-KR') : '—';
+  const qty = (etfForCalc>0&&amt>0) ? Math.floor(amt/etfForCalc) : 0;
+  const qtyEl = document.getElementById('qty_'+i);
+  if (qtyEl) qtyEl.textContent = qty>0 ? qty.toLocaleString('ko-KR') : '—';
+  updateSummary();
+}
+
+function recalcAll() { rows.forEach((_,i)=>recalcRow(i)); drawDonut(); }
+
+function updateSummary() {
+  const total=getTotal();
+  let sumW=0, sumA=0, sumQty=0, doneCount=0;
+  rows.forEach((r,i)=>{
+    const w=parseFloat(r.weight)||0; sumW+=w;
+    sumA+=Math.round(total*w/100);
+    const qEl=document.getElementById('qty_'+i);
+    if(qEl) sumQty+=parseInt(qEl.textContent.replace(/,/g,''))||0;
+    if(r.done) doneCount++;
+  });
+  const sb = document.getElementById('summaryBar');
+  const over = sumW>100.05;
+  sb.className = 'summary-bar'+(over?' weight-warn':'');
+  document.getElementById('sumWeight').textContent = sumW.toFixed(1);
+  document.getElementById('sumAmt').textContent    = sumA.toLocaleString('ko-KR');
+  document.getElementById('sumDone').textContent   = doneCount;
+  const avgP = (sumQty>0&&sumA>0)?Math.round(sumA/sumQty):0;
+  document.getElementById('sumQty').textContent      = sumQty>0?sumQty.toLocaleString('ko-KR'):'—';
+  document.getElementById('avgPrice').textContent    = avgP>0?avgP.toLocaleString('ko-KR'):'—';
+  document.getElementById('sumAmtTotal').textContent = sumA>0?sumA.toLocaleString('ko-KR'):'—';
+  const tr = parseFloat(document.getElementById('targetRate')?.value||20)/100;
+  document.getElementById('targetAmt').textContent   = sumA>0?Math.round(sumA*(1+tr)).toLocaleString('ko-KR'):'—';
+  if(over) showToast('⚠ 비중 합계가 100%를 초과했습니다!');
+}
+
+// ══════════════════════════════════════════════
+//  도넛 차트
+// ══════════════════════════════════════════════
+function drawDonut() {
+  const canvas = document.getElementById('donutCanvas');
+  const ctx    = canvas.getContext('2d');
+  const cx=70,cy=70,R=60,r=38;
+  ctx.clearRect(0,0,140,140);
+  const data = rows.map((r,i)=>({
+    label: r.etfName||`구간${i+1}`,
+    w: parseFloat(r.weight)||0,
+    color: COLORS[i%COLORS.length]
+  })).filter(d=>d.w>0);
+  const total = data.reduce((s,d)=>s+d.w,0)||1;
+  let angle = -Math.PI/2;
+  data.forEach(d=>{
+    const slice = (d.w/total)*2*Math.PI;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,R,angle,angle+slice);
+    ctx.closePath(); ctx.fillStyle=d.color; ctx.fill();
+    angle+=slice;
+  });
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.fillStyle='#1a1a2e'; ctx.font='bold 13px Segoe UI';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const sumW = rows.reduce((s,r)=>s+(parseFloat(r.weight)||0),0);
+  ctx.fillText(sumW.toFixed(0)+'%',cx,cy);
+
+  const legend = document.getElementById('donutLegend');
+  legend.innerHTML = data.map(d=>`
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${d.color}"></div>
+      <span>${d.label} <strong>${d.w}%</strong></span>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════
+//  실현손익
+// ══════════════════════════════════════════════
+function addPnl() {
+  const today = new Date();
+  pnls.push({ date: today.toISOString().slice(0,10), etfName:'', buyPrice:'', sellPrice:'', qty:'' });
+  renderPnl();
+}
+function deletePnl(i) { pnls.splice(i,1); renderPnl(); }
+function renderPnl() {
+  const tbody = document.getElementById('pnlBody');
+  tbody.innerHTML='';
+  let totalProfit=0, hasData=false;
+  pnls.forEach((p,i)=>{
+    const bp=parseFloat((p.buyPrice||'').replace(/,/g,''))||0;
+    const sp=parseFloat((p.sellPrice||'').replace(/,/g,''))||0;
+    const qty=parseFloat((p.qty||'').replace(/,/g,''))||0;
+    const profit = (bp>0&&sp>0&&qty>0) ? Math.round((sp-bp)*qty) : null;
+    const pctStr = (bp>0&&sp>0) ? ((sp-bp)/bp*100).toFixed(2)+'%' : '—';
+    const cls    = profit==null?'':profit>=0?'pnl-pos':'pnl-neg';
+    if(profit!=null){totalProfit+=profit;hasData=true;}
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input class="cell" type="date" value="${p.date||''}" oninput="pnls[${i}].date=this.value" style="width:110px"></td>
+      <td><input class="cell etf-name" type="text" value="${p.etfName||''}" placeholder="ETF명" oninput="pnls[${i}].etfName=this.value"></td>
+      <td><input class="cell" type="text" value="${p.buyPrice||''}" placeholder="매수단가" oninput="pnls[${i}].buyPrice=this.value;renderPnl()" style="width:80px"></td>
+      <td><input class="cell" type="text" value="${p.sellPrice||''}" placeholder="매도단가" oninput="pnls[${i}].sellPrice=this.value;renderPnl()" style="width:80px"></td>
+      <td><input class="cell" type="text" value="${p.qty||''}" placeholder="수량" oninput="pnls[${i}].qty=this.value;renderPnl()" style="width:55px"></td>
+      <td class="${cls}">${profit!=null?profit.toLocaleString('ko-KR'):'—'}</td>
+      <td class="${cls}">${pctStr}</td>
+      <td><button class="btn-del" onclick="deletePnl(${i})">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const totalEl=document.getElementById('pnlTotal');
+  if(hasData){
+    totalEl.style.display='block';
+    totalEl.innerHTML=`총 실현손익: <span class="${totalProfit>=0?'pnl-pos':'pnl-neg'}">${totalProfit.toLocaleString('ko-KR')}원</span>`;
+  } else totalEl.style.display='none';
+}
+
+// ══════════════════════════════════════════════
+//  TOP 20 조회 (현재가 실시간)
+// ══════════════════════════════════════════════
+const TOP20 = {
+  kospi: [
+    ['삼성전자','005930.KS'],['SK하이닉스','000660.KS'],['삼성바이오로직스','207940.KS'],
+    ['LG에너지솔루션','373220.KS'],['현대차','005380.KS'],['삼성SDI','006400.KS'],
+    ['기아','000270.KS'],['POSCO홀딩스','005490.KS'],['NAVER','035420.KS'],
+    ['LG화학','051910.KS'],['삼성물산','028260.KS'],['현대모비스','012330.KS'],
+    ['KB금융','105560.KS'],['셀트리온','068270.KS'],['신한지주','055550.KS'],
+    ['LG전자','066570.KS'],['카카오','035720.KS'],['하나금융지주','086790.KS'],
+    ['한국전력','015760.KS'],['두산에너빌리티','034020.KS']
+  ],
+  nasdaq: [
+    ['Apple','AAPL'],['Microsoft','MSFT'],['NVIDIA','NVDA'],['Amazon','AMZN'],
+    ['Meta','META'],['Alphabet A','GOOGL'],['Alphabet C','GOOG'],['Tesla','TSLA'],
+    ['Broadcom','AVGO'],['Netflix','NFLX'],['Costco','COST'],['AMD','AMD'],
+    ['T-Mobile','TMUS'],['PepsiCo','PEP'],['Qualcomm','QCOM'],['Intuitive Surg','ISRG'],
+    ['Texas Inst','TXN'],['Booking','BKNG'],['Palo Alto','PANW'],['Lam Research','LRCX']
+  ]
+};
+
+async function fetchTop20(market) {
+  const bodyEl = document.getElementById(market+'TopBody');
+  const updEl  = document.getElementById(market+'TopUpdated');
+  bodyEl.innerHTML = '<div class="top20-loading">현재가 조회 중…</div>';
+
+  const results = await Promise.all(
+    TOP20[market].map(([,sym]) => yahooFetch(sym))
+  );
+
+  const items = TOP20[market].map(([name,sym],i)=>({
+    name, sym,
+    price: results[i]?.price,
+    prev:  results[i]?.prev,
+    cap:   results[i]?.cap||0
+  })).filter(r=>r.price).sort((a,b)=>b.cap-a.cap);
+
+  if (!items.length) {
+    bodyEl.innerHTML='<div class="top20-loading">⚠ 조회 실패 — GitHub Pages에서 실행하세요</div>';
+    return;
+  }
+
+  const fmtCap = v => {
+    if (!v) return '—';
+    if (market==='kospi') {
+      if (v>=1e12) return (v/1e12).toFixed(1)+'조';
+      return (v/1e8).toFixed(0)+'억';
+    }
+    if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T';
+    return '$'+(v/1e9).toFixed(0)+'B';
+  };
+  const fmtP = v => v==null?'—':parseFloat(v).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  let html=`<table class="top20-table"><thead><tr>
+    <th>#</th><th>종목</th><th>현재가</th><th>등락률</th><th>시가총액</th>
+  </tr></thead><tbody>`;
+
+  items.forEach((r,idx)=>{
+    const pct = (r.prev&&r.price) ? (r.price-r.prev)/r.prev*100 : null;
+    const cls = pct==null?'chg-flat':pct>0?'chg-up':'chg-dn';
+    const pctStr = pct==null?'—':(pct>0?'+':'')+pct.toFixed(2)+'%';
+    html+=`<tr>
+      <td>${idx+1}</td>
+      <td>${r.name}</td>
+      <td>${fmtP(r.price)}</td>
+      <td class="${cls}">${pctStr}</td>
+      <td>${fmtCap(r.cap)}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  bodyEl.innerHTML=html;
+  const now=new Date();
+  updEl.textContent=`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} 기준`;
+}
+
+// ══════════════════════════════════════════════
+//  CSV 내보내기
+// ══════════════════════════════════════════════
+function exportCSV() {
+  const total=getTotal();
+  let csv='#,ETF명,하락폭(%),스타트단가,진입KOSPI,진입NASDAQ,비중(%),투자금(원),ETF단가(원),매입수량,목표단가,손절가,완료\n';
+  rows.forEach((r,i)=>{
+    const drop=parseFloat(r.drop)||0;
+    const startP=parseFloat((r.startPrice||'').replace(/,/g,''))||0;
+    const etfE=startP>0&&drop>0?(startP*(1-drop/100)).toFixed(0):(r.etfPrice||'');
+    const w=parseFloat(r.weight)||0;
+    const amt=w>0?Math.round(total*w/100):0;
+    const qty=parseFloat(etfE)>0&&amt>0?Math.floor(amt/parseFloat(etfE)):0;
+    const kEntry=kospiIndex>0?(kospiIndex*(1-drop/100)).toFixed(0):'';
+    const nEntry=nasdaqIndex>0?(nasdaqIndex*(1-drop/100)).toFixed(0):'';
+    const tr=parseFloat(document.getElementById('targetRate').value||20)/100;
+    const targetP=parseFloat(etfE)>0?Math.round(parseFloat(etfE)*(1+tr)):'';
+    const stopL=parseFloat(etfE)>0?Math.round(parseFloat(etfE)*0.9):'';
+    csv+=`${i+1},"${r.etfName||''}",${r.drop||''},${r.startPrice||''},${kEntry},${nEntry},${r.weight||''},${amt},${etfE},${qty},${targetP},${stopL},${r.done?'완료':''}\n`;
+  });
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='분할매수플랜.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════
+//  메모
+// ══════════════════════════════════════════════
+function addMemo() {
+  const today=new Date();
+  memos.push({ date:today.toISOString().slice(0,10), etf:'', text:'' });
+  renderMemos();
+}
+function deleteMemo(i) { memos.splice(i,1); renderMemos(); }
+function renderMemos() {
+  const list=document.getElementById('memoList');
+  list.innerHTML='';
+  memos.forEach((m,i)=>{
+    if(typeof m==='string') memos[i]={date:'',etf:'',text:m};
+    const memo=memos[i];
+    const div=document.createElement('div');
+    div.className='memo-item';
+    div.innerHTML=`
+      <div class="memo-item-top">
+        <span class="memo-date">📅 ${memo.date||'날짜없음'}</span>
+        <input class="memo-etf" type="text" placeholder="ETF명" value="${memo.etf||''}" oninput="memos[${i}].etf=this.value">
+        <button class="btn-memo-del" onclick="deleteMemo(${i})">✕</button>
+      </div>
+      <textarea placeholder="메모를 입력하세요..." oninput="memos[${i}].text=this.value">${memo.text||''}</textarea>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  저장 / 불러오기
+// ══════════════════════════════════════════════
+function saveAll() {
+  const sumW=rows.reduce((s,r)=>s+(parseFloat(r.weight)||0),0);
+  if(sumW>100.05){ if(!confirm('비중 합계가 '+sumW.toFixed(1)+'%입니다. 그래도 저장할까요?')) return; }
+  const data={
+    total: document.getElementById('totalInput').value,
+    kospi: kospiIndex, nasdaq: nasdaqIndex, usdkrw,
+    targetRate: document.getElementById('targetRate').value,
+    rows, pnls, memos
+  };
+  try { localStorage.setItem('dcaPlanner_v4',JSON.stringify(data)); showToast('✓ 저장되었습니다'); }
+  catch(e){ showToast('⚠ 저장 실패'); }
+}
+
+function loadAll() {
+  const raw=localStorage.getItem('dcaPlanner_v4') || localStorage.getItem('dcaPlanner_v3');
+  if(!raw) return;
+  try {
+    const d=JSON.parse(raw);
+    const fmt=v=>v?parseFloat(v).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+    if(d.total){ document.getElementById('totalInput').value=d.total; onTotalChange(); }
+    if(d.kospi){ kospiIndex=d.kospi; document.getElementById('kospiVal').textContent=fmt(d.kospi); }
+    if(d.nasdaq){ nasdaqIndex=d.nasdaq; document.getElementById('nasdaqVal').textContent=fmt(d.nasdaq); }
+    if(d.usdkrw){ usdkrw=d.usdkrw; document.getElementById('fxVal').textContent=fmt(d.usdkrw); }
+    if(d.targetRate) document.getElementById('targetRate').value=d.targetRate;
+    if(d.rows) rows=d.rows.map(r=>({
+      etfName:r.etfName||'', drop:r.drop||'', startPrice:r.startPrice||'',
+      weight:r.weight||'', etfPrice:r.etfPrice||'', done:r.done||false
+    }));
+    if(d.pnls) pnls=d.pnls;
+    if(d.memos) memos=d.memos;
+  } catch(e){}
+}
+
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ══════════════════════════════════════════════
+//  초기화
+// ══════════════════════════════════════════════
+window.onload = function() {
+  loadAll();
+  if(rows.length===0){ addRow(); addRow(); addRow(); }
+  renderTable();
+  renderPnl();
+  renderMemos();
+  recalcAll();
+  drawDonut();
+  fetchAll();
+};
+</script>
+</body>
+</html>
